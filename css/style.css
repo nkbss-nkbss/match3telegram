@@ -46,6 +46,7 @@ body {
     border-radius: 12px;
     padding: 10px;
     cursor: pointer;
+    position: relative;
 }
 
 .cell {
@@ -68,6 +69,63 @@ body {
     max-width: 40px;
     max-height: 40px;
     transition: transform 0.2s;
+}
+
+/* Специальные элементы */
+.cell img.bomb-item {
+    filter: drop-shadow(0 0 5px #3498db);
+    animation: bomb-glow 2s infinite alternate;
+}
+
+.cell img.rainbow-item {
+    filter: drop-shadow(0 0 5px #9b59b6);
+    animation: rainbow-glow 1.5s infinite alternate;
+}
+
+@keyframes bomb-glow {
+    from { filter: drop-shadow(0 0 5px #3498db); }
+    to { filter: drop-shadow(0 0 15px #2980b9); }
+}
+
+@keyframes rainbow-glow {
+    0% { filter: drop-shadow(0 0 5px #9b59b6); }
+    25% { filter: drop-shadow(0 0 10px #3498db); }
+    50% { filter: drop-shadow(0 0 15px #2ecc71); }
+    75% { filter: drop-shadow(0 0 10px #f1c40f); }
+    100% { filter: drop-shadow(0 0 5px #e74c3c); }
+}
+
+/* Иконки специальных элементов */
+.special-icon {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    font-size: 16px;
+    text-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+}
+
+.bomb-icon {
+    color: #e74c3c;
+    animation: pulse 1s infinite;
+}
+
+.rainbow-icon {
+    background: linear-gradient(90deg, #ff6b6b, #ffa500, #f4d03f, #2ecc71, #3498db, #9b59b6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: rainbow-text 2s linear infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.7; }
+}
+
+@keyframes rainbow-text {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
 }
 
 .cell.selected {
@@ -137,6 +195,29 @@ body {
     animation: fadeIn 0.3s ease;
 }
 
+/* Анимация взрыва бомбы */
+@keyframes explosion {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: 0.8; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Анимация радуги */
+@keyframes rainbow-pulse {
+    0%, 100% { 
+        box-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+    }
+    25% { 
+        box-shadow: 0 0 20px rgba(255, 165, 0, 0.7);
+    }
+    50% { 
+        box-shadow: 0 0 30px rgba(46, 204, 113, 0.8);
+    }
+    75% { 
+        box-shadow: 0 0 20px rgba(52, 152, 219, 0.7);
+    }
+}
+
 /* Адаптивность */
 @media (max-width: 480px) {
     .game-container {
@@ -152,5 +233,11 @@ body {
     .btn {
         padding: 10px 25px;
         font-size: 14px;
+    }
+    
+    .special-icon {
+        font-size: 12px;
+        top: 3px;
+        right: 3px;
     }
 }
