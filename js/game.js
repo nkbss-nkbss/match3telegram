@@ -67,6 +67,12 @@ class Match3Game {
         
         // Убираем начальные совпадения
         this.removeMatches();
+        
+        // Проверяем, есть ли возможные ходы
+        if (!this.hasPossibleMoves()) {
+            console.log('No possible moves, regenerating board...');
+            this.createBoard(); // Рекурсивно пересоздаём
+        }
     }
     
     getRandomItem() {
@@ -190,6 +196,11 @@ class Match3Game {
         }
         
         this.updateStats();
+        
+        // Проверяем, остались ли возможные ходы
+        if (this.moves > 0 && !this.hasPossibleMoves()) {
+            await this.regenerateBoard();
+        }
         
         // Проверка конца игры
         if (this.moves <= 0) {
@@ -333,6 +344,82 @@ class Match3Game {
             });
             matches = this.findMatches();
         }
+    }
+    
+    // Проверка наличия возможных ходов
+    hasPossibleMoves() {
+        // Проверяем каждую ячейку
+        for (let row = 0; row < this.size; row++) {
+            for (let col = 0; col < this.size; col++) {
+                // Проверяем 4 направления: вверх, вниз, влево, вправо
+                const directions = [
+                    { dr: -1, dc: 0 }, // вверх
+                    { dr: 1, dc: 0 },  // вниз
+                    { dr: 0, dc: -1 }, // влево
+                    { dr: 0, dc: 1 }   // вправо
+                ];
+                
+                for (const dir of directions) {
+                    const newRow = row + dir.dr;
+                    const newCol = col + dir.dc;
+                    
+                    // Проверяем, что новая ячейка в пределах доски
+                    if (newRow >= 0 && newRow < this.size && newCol >= 0 && newCol < this.size) {
+                        // Меняем ячейки местами
+                        const temp = this.board[row][col];
+                        this.board[row][col] = this.board[newRow][newCol];
+                        this.board[newRow][newCol] = temp;
+                        
+                        // Проверяем, есть ли совпадения
+                        const matches = this.findMatches();
+                        
+                        // Возвращаем ячейки обратно
+                        this.board[newRow][newCol] = this.board[row][col];
+                        this.board[row][col] = temp;
+                        
+                        // Если есть совпадения, значит ход возможен
+                        if (matches.length > 0) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Нет возможных ходов
+        return false;
+    }
+    
+    async regenerateBoard() {
+        console.log('No possible moves left. Regenerating board...');
+        
+        // Показываем сообщение
+        const boardElement = document.getElementById('game-board');
+        if (boardElement) {
+            const message = document.createElement('div');
+            message.style.position = 'absolute';
+            message.style.top = '50%';
+            message.style.left = '50%';
+            message.style.transform = 'translate(-50%, -50%)';
+            message.style.backgroundColor = 'rgba(102, 126, 234, 0.9)';
+            message.style.color = 'white';
+            message.style.padding = '15px 30px';
+            message.style.borderRadius = '25px';
+            message.style.fontSize = '18px';
+            message.style.fontWeight = 'bold';
+            message.style.zIndex = '100';
+            message.textContent = '🔄 Перетасовка...';
+            boardElement.appendChild(message);
+            
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Удаляем сообщение
+            message.remove();
+        }
+        
+        // Пересоздаём доску
+        this.createBoard();
+        this.renderBoard();
     }
     
     updateStats() {
