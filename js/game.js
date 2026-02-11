@@ -19,15 +19,14 @@ class Match3Game {
             { name: 'kiwi', color: '#27ae60', image: 'assets/icons/kiwi.png' }
         ];
         
+        this.imagesLoaded = false;
         this.init();
     }
     
     init() {
         this.preloadImages().then(() => {
-            this.createBoard();
-            this.renderBoard();
-            this.updateStats();
-            this.addEventListeners();
+            this.imagesLoaded = true;
+            this.startGame();
         });
     }
     
@@ -35,12 +34,25 @@ class Match3Game {
         const promises = this.items.map(item => {
             return new Promise((resolve) => {
                 const img = new Image();
-                img.onload = resolve;
-                img.onerror = resolve; // Продолжаем даже если изображение не загрузилось
+                img.onload = () => {
+                    console.log(`Loaded: ${item.name}`);
+                    resolve();
+                };
+                img.onerror = () => {
+                    console.error(`Failed to load: ${item.image}`);
+                    resolve(); // Продолжаем даже если изображение не загрузилось
+                };
                 img.src = item.image;
             });
         });
         await Promise.all(promises);
+    }
+    
+    startGame() {
+        this.createBoard();
+        this.renderBoard();
+        this.updateStats();
+        this.addEventListeners();
     }
     
     createBoard() {
@@ -63,6 +75,8 @@ class Match3Game {
     
     renderBoard() {
         const boardElement = document.getElementById('game-board');
+        if (!boardElement) return;
+        
         boardElement.innerHTML = '';
         
         for (let row = 0; row < this.size; row++) {
@@ -79,6 +93,22 @@ class Match3Game {
                 img.src = item.image;
                 img.alt = item.name;
                 img.draggable = false;
+                img.onerror = () => {
+                    // Если изображение не загрузилось, показываем цветной кружок
+                    img.style.display = 'none';
+                    const fallback = document.createElement('div');
+                    fallback.style.width = '80%';
+                    fallback.style.height = '80%';
+                    fallback.style.borderRadius = '50%';
+                    fallback.style.backgroundColor = item.color;
+                    fallback.style.display = 'flex';
+                    fallback.style.justifyContent = 'center';
+                    fallback.style.alignItems = 'center';
+                    fallback.style.color = 'white';
+                    fallback.style.fontWeight = 'bold';
+                    fallback.textContent = item.name.charAt(0).toUpperCase();
+                    cell.appendChild(fallback);
+                };
                 
                 cell.appendChild(img);
                 boardElement.appendChild(cell);
@@ -88,6 +118,8 @@ class Match3Game {
     
     addEventListeners() {
         const boardElement = document.getElementById('game-board');
+        if (!boardElement) return;
+        
         boardElement.addEventListener('click', (e) => {
             if (this.isProcessing || this.moves <= 0) return;
             
@@ -119,9 +151,12 @@ class Match3Game {
         });
         
         // Кнопка рестарта
-        document.getElementById('restart-btn').addEventListener('click', () => {
-            this.resetGame();
-        });
+        const restartBtn = document.getElementById('restart-btn');
+        if (restartBtn) {
+            restartBtn.addEventListener('click', () => {
+                this.resetGame();
+            });
+        }
     }
     
     areAdjacent(row1, col1, row2, col2) {
@@ -301,17 +336,24 @@ class Match3Game {
     }
     
     updateStats() {
-        document.getElementById('score').textContent = this.score;
-        document.getElementById('moves').textContent = this.moves;
+        const scoreEl = document.getElementById('score');
+        const movesEl = document.getElementById('moves');
+        if (scoreEl) scoreEl.textContent = this.score;
+        if (movesEl) movesEl.textContent = this.moves;
     }
     
     resetGame() {
+        console.log('Resetting game...');
         this.score = 0;
         this.moves = 10;
         this.selectedCell = null;
+        this.isProcessing = false;
+        
         this.createBoard();
         this.renderBoard();
         this.updateStats();
+        
+        console.log('Game reset complete');
     }
     
     gameOver() {
@@ -331,5 +373,6 @@ class Match3Game {
 let game;
 
 window.addEventListener('DOMContentLoaded', () => {
+    console.log('Game initializing...');
     game = new Match3Game();
 });
