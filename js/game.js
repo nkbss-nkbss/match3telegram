@@ -6,6 +6,7 @@ class Match3Game {
         this.moves = 10;
         this.selectedCell = null;
         this.isProcessing = false;
+        this.lastSwappedSpecial = null; // Для отслеживания обмена с радугой
         
         // Массив изображений
         this.items = [
@@ -201,6 +202,23 @@ class Match3Game {
     }
     
     async swapCells(row1, col1, row2, col2) {
+        // Проверяем, есть ли радужный элемент в обмене
+        const item1 = this.board[row1][col1];
+        const item2 = this.board[row2][col2];
+        
+        const hasRainbow = item1.isRainbow || item2.isRainbow;
+        
+        if (hasRainbow) {
+            // Если обмениваем радугу, запоминаем тип элемента для активации
+            this.lastSwappedSpecial = {
+                rainbowRow: item1.isRainbow ? row1 : row2,
+                rainbowCol: item1.isRainbow ? col1 : col2,
+                targetType: item1.isRainbow ? item2.name : item1.name
+            };
+        } else {
+            this.lastSwappedSpecial = null;
+        }
+        
         // Меняем местами в данных
         const temp = this.board[row1][col1];
         this.board[row1][col1] = this.board[row2][col2];
@@ -221,6 +239,9 @@ class Match3Game {
             this.board[row1][col1] = this.board[row2][col2];
             this.board[row2][col2] = temp;
             this.renderBoard();
+            
+            // Если был обмен с радугой, но не было совпадений - отменяем
+            this.lastSwappedSpecial = null;
         }
         
         this.updateStats();
@@ -323,6 +344,7 @@ class Match3Game {
         // Собираем все ячейки для удаления
         const cellsToClear = new Set();
         const specialItemsToCreate = [];
+        const bombActivations = []; // Бомбы, которые нужно активировать
         
         matches.forEach(match => {
             const matchedItems = [];
@@ -334,9 +356,14 @@ class Match3Game {
                 
                 cellsToClear.add(key);
                 matchedItems.push({ row, col, item: this.board[row][col] });
+                
+                // Проверяем, есть ли бомба в совпадении
+                if (this.board[row][col].isBomb) {
+                    bombActivations.push({ row, col });
+                }
             }
             
-            // Создаём специальный элемент в центре комбинации
+            // Создаём специальный элемент в центре комбинации (если это не бомба/радуга)
             if (match.type === 'bomb' || match.type === 'rainbow') {
                 const centerIndex = Math.floor(match.length / 2);
                 const centerRow = match.direction === 'horizontal' 
@@ -346,38 +373,49 @@ class Match3Game {
                     ? match.col + centerIndex 
                     : match.col;
                 
-                let specialItem;
-                if (match.type === 'bomb') {
-                    specialItem = { ...this.specialItems.bomb, isBomb: true };
-                } else if (match.type === 'rainbow') {
-                    specialItem = { ...this.specialItems.rainbow, isRainbow: true };
+                // Создаём специальный элемент ТОЛЬКО если там не бомба/радуга
+                const existingItem = this.board[centerRow][centerCol];
+                if (!existingItem.isBomb && !existingItem.isRainbow) {
+                    let specialItem;
+                    if (match.type === 'bomb') {
+                        specialItem = { ...this.specialItems.bomb, isBomb: true };
+                    } else if (match.type === 'rainbow') {
+                        specialItem = { ...this.specialItems.rainbow, isRainbow: true };
+                    }
+                    
+                    specialItemsToCreate.push({
+                        row: centerRow,
+                        col: centerCol,
+                        item: specialItem
+                    });
                 }
-                
-                specialItemsToCreate.push({
-                    row: centerRow,
-                    col: centerCol,
-                    item: specialItem
-                });
             }
         });
         
-        // Добавляем очки
+        // Добавляем очки за обычные совпадения
         this.score += cellsToClear.size * 10;
         
-        // Обрабатываем специальные элементы (бомбы и радуги)
-        for (const special of specialItemsToCreate) {
-            if (special.item.isBomb) {
-                await this.activateBomb(special.row, special.col, cellsToClear);
-            } else if (special.item.isRainbow) {
-                await this.activateRainbow(special.row, special.col, cellsToClear);
-            }
+        // Обрабатываем активацию бомб
+        for (const bomb of bombActivations) {
+            await this.activateBomb(bomb.row, bomb.col, cellsToClear);
+        }
+        
+        // Обрабатываем активацию радуги (если была)
+        if (this.lastSwappedSpecial) {
+            await this.activateRainbow(
+                this.lastSwappedSpecial.rainbowRow,
+                this.lastSwappedSpecial.rainbowCol,
+                this.lastSwappedSpecial.targetType,
+                cellsToClear
+            );
+            this.lastSwappedSpecial = null;
         }
         
         // Анимация удаления
         await this.animateMatches(cellsToClear);
         
-        // Заполняем пустые ячейки
-        await this.fillEmptyCells(cellsToClear);
+        // Заполняем пустые ячейки и создаём специальные элементы
+        await this.fillEmptyCells(cellsToClear, specialItemsToCreate);
         
         // Рекурсивно проверяем новые совпадения
         const newMatches = this.findMatches();
@@ -389,6 +427,8 @@ class Match3Game {
     }
     
     async activateBomb(row, col, cellsToClear) {
+        console.log('💣 Бомба взорвалась в', row, col);
+        
         // Бомба уничтожает 3х3 область вокруг себя
         for (let r = Math.max(0, row - 1); r <= Math.min(this.size - 1, row + 1); r++) {
             for (let c = Math.max(0, col - 1); c <= Math.min(this.size - 1, col + 1); c++) {
@@ -403,11 +443,10 @@ class Match3Game {
         await this.showExplosionAnimation(row, col);
     }
     
-    async activateRainbow(row, col, cellsToClear) {
-        // Радужный элемент уничтожает ВСЕ элементы такого же типа на доске
-        const rainbowItem = this.board[row][col];
-        const targetName = rainbowItem.name;
+    async activateRainbow(row, col, targetName, cellsToClear) {
+        console.log('🌈 Радуга активирована, уничтожаем:', targetName);
         
+        // Радужный элемент уничтожает ВСЕ элементы указанного типа на доске
         for (let r = 0; r < this.size; r++) {
             for (let c = 0; c < this.size; c++) {
                 if (this.board[r][c].name === targetName) {
@@ -415,6 +454,9 @@ class Match3Game {
                 }
             }
         }
+        
+        // Также уничтожаем сам радужный элемент
+        cellsToClear.add(`${row},${col}`);
         
         // Дополнительные очки за радугу
         this.score += 100;
@@ -488,7 +530,7 @@ class Match3Game {
         });
     }
     
-    async fillEmptyCells(cellsToClear) {
+    async fillEmptyCells(cellsToClear, specialItemsToCreate) {
         // Создаем массив пустых ячеек
         const emptyCells = Array.from(cellsToClear);
         
@@ -511,6 +553,11 @@ class Match3Game {
             for (let row = 0; row < emptyCount; row++) {
                 this.board[row][col] = this.getRandomItem();
             }
+        }
+        
+        // Создаём специальные элементы
+        for (const special of specialItemsToCreate) {
+            this.board[special.row][special.col] = special.item;
         }
         
         // Плавное обновление доски
@@ -627,6 +674,7 @@ class Match3Game {
         this.moves = 10;
         this.selectedCell = null;
         this.isProcessing = false;
+        this.lastSwappedSpecial = null;
         
         this.createBoard();
         this.renderBoard();
