@@ -2,14 +2,19 @@
   "short_name": "Match3",
   "name": "Match-3 Puzzle Game",
   "description": "Увлекательная игра три в ряд прямо в Telegram",
-  "start_url": "index.html",
+  "start_url": "/index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#667eea",
   "icons": [
     {
-      "src": "icon.png",
+      "src": "assets/icons/icon.png",
       "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/icons/icon.png",
+      "sizes": "512x512",
       "type": "image/png"
     }
   ]

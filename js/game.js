@@ -7,16 +7,40 @@ class Match3Game {
         this.selectedCell = null;
         this.isProcessing = false;
         
-        this.emojis = ['🍎', '🍊', '🍋', '🍇', '🍒', '🍓', '🍑', '🥝'];
+        // Массив изображений
+        this.items = [
+            { name: 'apple', color: '#ff6b6b', image: 'assets/icons/apple.png' },
+            { name: 'orange', color: '#ffa500', image: 'assets/icons/orange.png' },
+            { name: 'lemon', color: '#f4d03f', image: 'assets/icons/lemon.png' },
+            { name: 'grape', color: '#8e44ad', image: 'assets/icons/grape.png' },
+            { name: 'cherry', color: '#e74c3c', image: 'assets/icons/cherry.png' },
+            { name: 'strawberry', color: '#c0392b', image: 'assets/icons/strawberry.png' },
+            { name: 'peach', color: '#f39c12', image: 'assets/icons/peach.png' },
+            { name: 'kiwi', color: '#27ae60', image: 'assets/icons/kiwi.png' }
+        ];
         
         this.init();
     }
     
     init() {
-        this.createBoard();
-        this.renderBoard();
-        this.updateStats();
-        this.addEventListeners();
+        this.preloadImages().then(() => {
+            this.createBoard();
+            this.renderBoard();
+            this.updateStats();
+            this.addEventListeners();
+        });
+    }
+    
+    async preloadImages() {
+        const promises = this.items.map(item => {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = resolve;
+                img.onerror = resolve; // Продолжаем даже если изображение не загрузилось
+                img.src = item.image;
+            });
+        });
+        await Promise.all(promises);
     }
     
     createBoard() {
@@ -24,7 +48,7 @@ class Match3Game {
         for (let row = 0; row < this.size; row++) {
             const rowArray = [];
             for (let col = 0; col < this.size; col++) {
-                rowArray.push(this.getRandomEmoji());
+                rowArray.push(this.getRandomItem());
             }
             this.board.push(rowArray);
         }
@@ -33,8 +57,8 @@ class Match3Game {
         this.removeMatches();
     }
     
-    getRandomEmoji() {
-        return this.emojis[Math.floor(Math.random() * this.emojis.length)];
+    getRandomItem() {
+        return this.items[Math.floor(Math.random() * this.items.length)];
     }
     
     renderBoard() {
@@ -45,10 +69,18 @@ class Match3Game {
             for (let col = 0; col < this.size; col++) {
                 const cell = document.createElement('div');
                 cell.className = 'cell';
-                cell.textContent = this.board[row][col];
                 cell.dataset.row = row;
                 cell.dataset.col = col;
                 
+                const item = this.board[row][col];
+                
+                // Создаём изображение
+                const img = document.createElement('img');
+                img.src = item.image;
+                img.alt = item.name;
+                img.draggable = false;
+                
+                cell.appendChild(img);
                 boardElement.appendChild(cell);
             }
         }
@@ -136,9 +168,9 @@ class Match3Game {
         // По горизонтали
         for (let row = 0; row < this.size; row++) {
             for (let col = 0; col < this.size - 2; col++) {
-                const emoji = this.board[row][col];
-                if (emoji === this.board[row][col + 1] && 
-                    emoji === this.board[row][col + 2]) {
+                const item = this.board[row][col];
+                if (item.name === this.board[row][col + 1].name && 
+                    item.name === this.board[row][col + 2].name) {
                     matches.push({ row, col, length: 3, direction: 'horizontal' });
                 }
             }
@@ -147,9 +179,9 @@ class Match3Game {
         // По вертикали
         for (let col = 0; col < this.size; col++) {
             for (let row = 0; row < this.size - 2; row++) {
-                const emoji = this.board[row][col];
-                if (emoji === this.board[row + 1][col] && 
-                    emoji === this.board[row + 2][col]) {
+                const item = this.board[row][col];
+                if (item.name === this.board[row + 1][col].name && 
+                    item.name === this.board[row + 2][col].name) {
                     matches.push({ row, col, length: 3, direction: 'vertical' });
                 }
             }
@@ -209,7 +241,7 @@ class Match3Game {
             setTimeout(() => {
                 cells.forEach(cell => {
                     if (cell.classList.contains('matched')) {
-                        cell.textContent = '';
+                        cell.innerHTML = '';
                         cell.classList.remove('matched');
                     }
                 });
@@ -239,7 +271,7 @@ class Match3Game {
             
             // Заполняем новые ячейки сверху
             for (let row = 0; row < emptyCount; row++) {
-                this.board[row][col] = this.getRandomEmoji();
+                this.board[row][col] = this.getRandomItem();
             }
         }
         
@@ -252,6 +284,20 @@ class Match3Game {
             this.renderBoard();
             setTimeout(resolve, 200);
         });
+    }
+    
+    removeMatches() {
+        let matches = this.findMatches();
+        while (matches.length > 0) {
+            matches.forEach(match => {
+                for (let i = 0; i < match.length; i++) {
+                    const row = match.direction === 'horizontal' ? match.row : match.row + i;
+                    const col = match.direction === 'horizontal' ? match.col + i : match.col;
+                    this.board[row][col] = this.getRandomItem();
+                }
+            });
+            matches = this.findMatches();
+        }
     }
     
     updateStats() {
