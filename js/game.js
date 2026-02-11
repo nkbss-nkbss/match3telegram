@@ -19,6 +19,12 @@ class Match3Game {
             { name: 'kiwi', color: '#27ae60', image: 'assets/icons/kiwi.png' }
         ];
         
+        // Специальные элементы
+        this.specialItems = {
+            bomb: { name: 'bomb', color: '#3498db', image: 'assets/icons/bomb.png' },
+            rainbow: { name: 'rainbow', color: '#9b59b6', image: 'assets/icons/rainbow.png' }
+        };
+        
         this.imagesLoaded = false;
         this.init();
     }
@@ -31,7 +37,8 @@ class Match3Game {
     }
     
     async preloadImages() {
-        const promises = this.items.map(item => {
+        const allItems = [...this.items, ...Object.values(this.specialItems)];
+        const promises = allItems.map(item => {
             return new Promise((resolve) => {
                 const img = new Image();
                 img.onload = () => {
@@ -40,7 +47,7 @@ class Match3Game {
                 };
                 img.onerror = () => {
                     console.error(`Failed to load: ${item.image}`);
-                    resolve(); // Продолжаем даже если изображение не загрузилось
+                    resolve();
                 };
                 img.src = item.image;
             });
@@ -71,7 +78,7 @@ class Match3Game {
         // Проверяем, есть ли возможные ходы
         if (!this.hasPossibleMoves()) {
             console.log('No possible moves, regenerating board...');
-            this.createBoard(); // Рекурсивно пересоздаём
+            this.createBoard();
         }
     }
     
@@ -99,8 +106,23 @@ class Match3Game {
                 img.src = item.image;
                 img.alt = item.name;
                 img.draggable = false;
+                
+                // Добавляем иконку для специальных элементов
+                if (item.isBomb) {
+                    img.classList.add('bomb-item');
+                    const bombIcon = document.createElement('div');
+                    bombIcon.className = 'special-icon bomb-icon';
+                    bombIcon.textContent = '💣';
+                    cell.appendChild(bombIcon);
+                } else if (item.isRainbow) {
+                    img.classList.add('rainbow-item');
+                    const rainbowIcon = document.createElement('div');
+                    rainbowIcon.className = 'special-icon rainbow-icon';
+                    rainbowIcon.textContent = '🌈';
+                    cell.appendChild(rainbowIcon);
+                }
+                
                 img.onerror = () => {
-                    // Если изображение не загрузилось, показываем цветной кружок
                     img.style.display = 'none';
                     const fallback = document.createElement('div');
                     fallback.style.width = '80%';
@@ -112,7 +134,13 @@ class Match3Game {
                     fallback.style.alignItems = 'center';
                     fallback.style.color = 'white';
                     fallback.style.fontWeight = 'bold';
-                    fallback.textContent = item.name.charAt(0).toUpperCase();
+                    if (item.isBomb) {
+                        fallback.textContent = '💣';
+                    } else if (item.isRainbow) {
+                        fallback.textContent = '🌈';
+                    } else {
+                        fallback.textContent = item.name.charAt(0).toUpperCase();
+                    }
                     cell.appendChild(fallback);
                 };
                 
@@ -210,14 +238,38 @@ class Match3Game {
     
     findMatches() {
         const matches = [];
+        const visited = new Set();
         
         // По горизонтали
         for (let row = 0; row < this.size; row++) {
             for (let col = 0; col < this.size - 2; col++) {
                 const item = this.board[row][col];
-                if (item.name === this.board[row][col + 1].name && 
-                    item.name === this.board[row][col + 2].name) {
-                    matches.push({ row, col, length: 3, direction: 'horizontal' });
+                const key = `${row},${col}`;
+                
+                if (visited.has(key)) continue;
+                
+                // Считаем длину совпадения
+                let length = 1;
+                while (col + length < this.size && 
+                       this.board[row][col + length].name === item.name) {
+                    length++;
+                }
+                
+                if (length >= 3) {
+                    matches.push({ 
+                        row, 
+                        col, 
+                        length, 
+                        direction: 'horizontal',
+                        type: this.getMatchType(length)
+                    });
+                    
+                    // Помечаем все ячейки как посещённые
+                    for (let i = 0; i < length; i++) {
+                        visited.add(`${row},${col + i}`);
+                    }
+                    
+                    col += length - 1; // Пропускаем проверенные ячейки
                 }
             }
         }
@@ -226,9 +278,32 @@ class Match3Game {
         for (let col = 0; col < this.size; col++) {
             for (let row = 0; row < this.size - 2; row++) {
                 const item = this.board[row][col];
-                if (item.name === this.board[row + 1][col].name && 
-                    item.name === this.board[row + 2][col].name) {
-                    matches.push({ row, col, length: 3, direction: 'vertical' });
+                const key = `${row},${col}`;
+                
+                if (visited.has(key)) continue;
+                
+                // Считаем длину совпадения
+                let length = 1;
+                while (row + length < this.size && 
+                       this.board[row + length][col].name === item.name) {
+                    length++;
+                }
+                
+                if (length >= 3) {
+                    matches.push({ 
+                        row, 
+                        col, 
+                        length, 
+                        direction: 'vertical',
+                        type: this.getMatchType(length)
+                    });
+                    
+                    // Помечаем все ячейки как посещённые
+                    for (let i = 0; i < length; i++) {
+                        visited.add(`${row + i},${col}`);
+                    }
+                    
+                    row += length - 1; // Пропускаем проверенные ячейки
                 }
             }
         }
@@ -236,23 +311,67 @@ class Match3Game {
         return matches;
     }
     
+    getMatchType(length) {
+        if (length >= 5) return 'rainbow';  // 5+ в ряд = радужный
+        if (length >= 4) return 'bomb';     // 4 в ряд = бомба
+        return 'normal';                    // 3 в ряд = обычный
+    }
+    
     async processMatches(matches) {
         this.isProcessing = true;
         
-        // Помечаем совпадения
+        // Собираем все ячейки для удаления
         const cellsToClear = new Set();
+        const specialItemsToCreate = [];
         
         matches.forEach(match => {
+            const matchedItems = [];
+            
             for (let i = 0; i < match.length; i++) {
-                const key = match.direction === 'horizontal' 
-                    ? `${match.row},${match.col + i}`
-                    : `${match.row + i},${match.col}`;
+                const row = match.direction === 'horizontal' ? match.row : match.row + i;
+                const col = match.direction === 'horizontal' ? match.col + i : match.col;
+                const key = `${row},${col}`;
+                
                 cellsToClear.add(key);
+                matchedItems.push({ row, col, item: this.board[row][col] });
+            }
+            
+            // Создаём специальный элемент в центре комбинации
+            if (match.type === 'bomb' || match.type === 'rainbow') {
+                const centerIndex = Math.floor(match.length / 2);
+                const centerRow = match.direction === 'horizontal' 
+                    ? match.row 
+                    : match.row + centerIndex;
+                const centerCol = match.direction === 'horizontal' 
+                    ? match.col + centerIndex 
+                    : match.col;
+                
+                let specialItem;
+                if (match.type === 'bomb') {
+                    specialItem = { ...this.specialItems.bomb, isBomb: true };
+                } else if (match.type === 'rainbow') {
+                    specialItem = { ...this.specialItems.rainbow, isRainbow: true };
+                }
+                
+                specialItemsToCreate.push({
+                    row: centerRow,
+                    col: centerCol,
+                    item: specialItem
+                });
             }
         });
         
         // Добавляем очки
         this.score += cellsToClear.size * 10;
+        
+        // Обрабатываем специальные элементы (бомбы и радуги)
+        for (const special of specialItemsToCreate) {
+            if (special.item.isBomb) {
+                await this.activateBomb(special.row, special.col, cellsToClear);
+            } else if (special.item.isRainbow) {
+                await this.activateRainbow(special.row, special.col, cellsToClear);
+            }
+        }
         
         // Анимация удаления
         await this.animateMatches(cellsToClear);
@@ -267,6 +386,79 @@ class Match3Game {
         }
         
         this.isProcessing = false;
+    }
+    
+    async activateBomb(row, col, cellsToClear) {
+        // Бомба уничтожает 3х3 область вокруг себя
+        for (let r = Math.max(0, row - 1); r <= Math.min(this.size - 1, row + 1); r++) {
+            for (let c = Math.max(0, col - 1); c <= Math.min(this.size - 1, col + 1); c++) {
+                cellsToClear.add(`${r},${c}`);
+            }
+        }
+        
+        // Дополнительные очки за бомбу
+        this.score += 50;
+        
+        // Показываем анимацию взрыва
+        await this.showExplosionAnimation(row, col);
+    }
+    
+    async activateRainbow(row, col, cellsToClear) {
+        // Радужный элемент уничтожает ВСЕ элементы такого же типа на доске
+        const rainbowItem = this.board[row][col];
+        const targetName = rainbowItem.name;
+        
+        for (let r = 0; r < this.size; r++) {
+            for (let c = 0; c < this.size; c++) {
+                if (this.board[r][c].name === targetName) {
+                    cellsToClear.add(`${r},${c}`);
+                }
+            }
+        }
+        
+        // Дополнительные очки за радугу
+        this.score += 100;
+        
+        // Показываем анимацию радуги
+        await this.showRainbowAnimation(row, col);
+    }
+    
+    async showExplosionAnimation(row, col) {
+        return new Promise(resolve => {
+            const boardElement = document.getElementById('game-board');
+            const cell = boardElement.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+            
+            if (cell) {
+                cell.style.animation = 'explosion 0.5s ease';
+                cell.style.boxShadow = '0 0 30px #ff6b6b, 0 0 60px #ff4757';
+                
+                setTimeout(() => {
+                    cell.style.animation = '';
+                    cell.style.boxShadow = '';
+                    resolve();
+                }, 500);
+            } else {
+                resolve();
+            }
+        });
+    }
+    
+    async showRainbowAnimation(row, col) {
+        return new Promise(resolve => {
+            const boardElement = document.getElementById('game-board');
+            const cells = boardElement.querySelectorAll('.cell');
+            
+            cells.forEach(cell => {
+                cell.style.animation = 'rainbow-pulse 0.5s ease';
+            });
+            
+            setTimeout(() => {
+                cells.forEach(cell => {
+                    cell.style.animation = '';
+                });
+                resolve();
+            }, 500);
+        });
     }
     
     async animateMatches(cellsToClear) {
